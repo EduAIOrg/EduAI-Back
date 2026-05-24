@@ -1,0 +1,1 @@
+"""EduAI Africa Backend Application."""

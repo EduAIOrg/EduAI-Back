@@ -1,0 +1,373 @@
+"""Documents router."""
+import logging
+import os
+import uuid
+from pathlib import Path
+from typing import List
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
+from app.dependencies import get_db, get_current_user
+from app.models.user import User
+from app.models.document import Document, DocumentStatus
+from app.schemas.document import (
+    DocumentResponse,
+    DocumentStatusResponse,
+    DocumentSummaryResponse
+)
+from app.services.document_service import DocumentService
+from app.tasks.document_tasks import process_document_task
+from app.config import settings
+from app.utils.pdf_utils import PDFProcessor
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/documents", tags=["Documents"])
+
+
+@router.get("/", response_model=List[DocumentResponse])
+async def list_documents(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+) -> List[DocumentResponse]:
+    """
+    List all documents for the current user.
+    
+    Args:
+        current_user: Current authenticated user
+        db: Database session
+        
+    Returns:
+        list: List of user's documents
+    """
+    try:
+        result = await db.execute(
+            select(Document)
+            .where(Document.user_id == current_user.id)
+            .order_by(Document.created_at.desc())
+        )
+        documents = result.scalars().all()
+        
+        return [DocumentResponse.model_validate(doc) for doc in documents]
+        
+    except Exception as e:
+        logger.error(f"Error listing documents: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to list documents"
+        )
+
+
+@router.post("/", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+async def upload_document(
+    file: UploadFile = File(...),
+    title: str = Form(None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+) -> DocumentResponse:
+    """
+    Upload a new PDF document.
+    
+    Args:
+        file: PDF file to upload
+        title: Optional document title
+        current_user: Current authenticated user
+        db: Database session
+        
+    Returns:
+        DocumentResponse: Created document
+        
+    Raises:
+        HTTPException: If file is invalid or upload fails
+    """
+    try:
+        # Validate file type
+        if not file.content_type == "application/pdf":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only PDF files are allowed"
+            )
+        
+        # Read file content
+        content = await file.read()
+        file_size = len(content)
+        
+        # Validate file size
+        if file_size > settings.max_upload_size_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"File size exceeds maximum of {settings.MAX_UPLOAD_SIZE_MB}MB"
+            )
+        
+        # Create user upload directory
+        user_upload_dir = Path(settings.UPLOADS_DIR) / str(current_user.id)
+        user_upload_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Generate unique filename
+        file_id = uuid.uuid4()
+        file_extension = Path(file.filename).suffix
+        filename = f"{file_id}{file_extension}"
+        file_path = user_upload_dir / filename
+        
+        # Save file
+        with open(file_path, "wb") as f:
+            f.write(content)
+        
+        logger.info(f"Saved file: {file_path}")
+        
+        # Validate PDF
+        if not PDFProcessor.validate_pdf(str(file_path)):
+            file_path.unlink()  # Delete invalid file
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid PDF file"
+            )
+        
+        # Use provided title or filename
+        doc_title = title if title else Path(file.filename).stem
+        
+        # Create document record
+        document = Document(
+            user_id=current_user.id,
+            title=doc_title,
+            filename=str(file_path),
+            file_size=file_size,
+            status=DocumentStatus.UPLOADING
+        )
+        
+        db.add(document)
+        await db.commit()
+        await db.refresh(document)
+        
+        # Launch async processing task
+        process_document_task.delay(str(document.id))
+        
+        logger.info(f"Document created: {document.id}")
+        
+        return DocumentResponse.model_validate(document)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error uploading document: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to upload document"
+        )
+
+
+@router.get("/{document_id}", response_model=DocumentResponse)
+async def get_document(
+    document_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+) -> DocumentResponse:
+    """
+    Get a specific document.
+    
+    Args:
+        document_id: Document UUID
+        current_user: Current authenticated user
+        db: Database session
+        
+    Returns:
+        DocumentResponse: Document details
+        
+    Raises:
+        HTTPException: If document not found or access denied
+    """
+    try:
+        result = await db.execute(
+            select(Document).where(Document.id == document_id)
+        )
+        document = result.scalar_one_or_none()
+        
+        if not document:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document not found"
+            )
+        
+        # Check ownership
+        if document.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
+        
+        return DocumentResponse.model_validate(document)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting document: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get document"
+        )
+
+
+@router.get("/{document_id}/status", response_model=DocumentStatusResponse)
+async def get_document_status(
+    document_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+) -> DocumentStatusResponse:
+    """
+    Get document processing status.
+    
+    Args:
+        document_id: Document UUID
+        current_user: Current authenticated user
+        db: Database session
+        
+    Returns:
+        DocumentStatusResponse: Processing status
+    """
+    try:
+        result = await db.execute(
+            select(Document).where(Document.id == document_id)
+        )
+        document = result.scalar_one_or_none()
+        
+        if not document:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document not found"
+            )
+        
+        if document.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
+        
+        # Generate progress message
+        progress_messages = {
+            DocumentStatus.UPLOADING: "Téléchargement en cours...",
+            DocumentStatus.PROCESSING: "Traitement du document en cours...",
+            DocumentStatus.READY: "Document prêt",
+            DocumentStatus.ERROR: "Erreur lors du traitement"
+        }
+        
+        return DocumentStatusResponse(
+            status=document.status,
+            progress_message=progress_messages.get(
+                document.status,
+                "Statut inconnu"
+            )
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting document status: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get document status"
+        )
+
+
+@router.get("/{document_id}/summary", response_model=DocumentSummaryResponse)
+async def get_document_summary(
+    document_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+) -> DocumentSummaryResponse:
+    """
+    Get document summary.
+    
+    Args:
+        document_id: Document UUID
+        current_user: Current authenticated user
+        db: Database session
+        
+    Returns:
+        DocumentSummaryResponse: Document summary
+    """
+    try:
+        result = await db.execute(
+            select(Document).where(Document.id == document_id)
+        )
+        document = result.scalar_one_or_none()
+        
+        if not document:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document not found"
+            )
+        
+        if document.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
+        
+        return DocumentSummaryResponse(
+            summary=document.summary,
+            status=document.status
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error getting document summary: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to get document summary"
+        )
+
+
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_document(
+    document_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+) -> None:
+    """
+    Delete a document.
+    
+    Args:
+        document_id: Document UUID
+        current_user: Current authenticated user
+        db: Database session
+        
+    Raises:
+        HTTPException: If document not found or access denied
+    """
+    try:
+        result = await db.execute(
+            select(Document).where(Document.id == document_id)
+        )
+        document = result.scalar_one_or_none()
+        
+        if not document:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Document not found"
+            )
+        
+        if document.user_id != current_user.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
+        
+        # Delete files and vector store
+        await DocumentService.delete_document_files(document)
+        
+        # Delete database record
+        await db.delete(document)
+        await db.commit()
+        
+        logger.info(f"Document deleted: {document_id}")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting document: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete document"
+        )

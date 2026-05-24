@@ -1,0 +1,81 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:14-alpine
+    container_name: eduai_postgres
+    environment:
+      POSTGRES_DB: eduai
+      POSTGRES_USER: eduai
+      POSTGRES_PASSWORD: eduai_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U eduai"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis
+  redis:
+    image: redis:7-alpine
+    container_name: eduai_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Application
+  api:
+    build: .
+    container_name: eduai_api
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://eduai:eduai_password@postgres:5432/eduai
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    volumes:
+      - ./uploads:/app/uploads
+      - ./chroma_db:/app/chroma_db
+      - ./logs:/app/logs
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "alembic upgrade head &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+  # Celery Worker
+  celery_worker:
+    build: .
+    container_name: eduai_celery_worker
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://eduai:eduai_password@postgres:5432/eduai
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+    volumes:
+      - ./uploads:/app/uploads
+      - ./chroma_db:/app/chroma_db
+      - ./logs:/app/logs
+    depends_on:
+      - postgres
+      - redis
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=4
+
+volumes:
+  postgres_data:
