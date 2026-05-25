@@ -6,7 +6,7 @@ from uuid import UUID
 import chromadb
 from chromadb.config import Settings as ChromaSettings
 from langchain_community.vectorstores import Chroma
-from langchain.schema import Document
+from langchain_core.documents import Document
 
 from app.config import settings
 from app.ai.embeddings import EmbeddingsFactory
