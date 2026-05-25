@@ -2,7 +2,6 @@
 import logging
 from typing import AsyncGenerator, List
 from uuid import UUID
-from langchain.memory import ConversationBufferWindowMemory
 from langchain.schema import HumanMessage, AIMessage
 
 from app.ai.vector_store import vector_store_manager

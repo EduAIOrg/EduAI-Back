@@ -1,6 +1,5 @@
 """LangChain prompt templates."""
-from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
-
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 # RAG Chat Prompt
 RAG_CHAT_PROMPT = ChatPromptTemplate.from_messages([
