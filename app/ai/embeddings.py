@@ -16,6 +16,7 @@ class EmbeddingsFactory:
         """
         Create OpenAI embeddings instance.
         """
+
         logger.info("Creating OpenAI embeddings: text-embedding-3-small")
 
         return OpenAIEmbeddings(
