@@ -4,15 +4,12 @@ from datetime import datetime, timedelta
 from typing import Optional
 from uuid import UUID
 from jose import JWTError, jwt
-from passlib.context import CryptContext
+import bcrypt
 
 from app.config import settings
 from app.schemas.auth import TokenData
 
 logger = logging.getLogger(__name__)
-
-# Password hashing context
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class AuthService:
@@ -29,7 +26,10 @@ class AuthService:
         Returns:
             str: Hashed password
         """
-        return pwd_context.hash(password)
+        password_bytes = password.encode('utf-8')
+        salt = bcrypt.gensalt()
+        hashed = bcrypt.hashpw(password_bytes, salt)
+        return hashed.decode('utf-8')
     
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -43,7 +43,14 @@ class AuthService:
         Returns:
             bool: True if password matches
         """
-        return pwd_context.verify(plain_password, hashed_password)
+        try:
+            return bcrypt.checkpw(
+                plain_password.encode('utf-8'),
+                hashed_password.encode('utf-8')
+            )
+        except Exception as e:
+            logger.error(f"Error verifying password: {e}")
+            return False
     
     @staticmethod
     def create_access_token(user_id: UUID, email: str) -> tuple[str, datetime]:
