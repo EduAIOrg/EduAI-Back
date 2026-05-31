@@ -58,6 +58,7 @@ class DocumentService:
                 # Save to a temporary local file
                 temp_filename = f"temp_process_{document.id}.pdf"
                 temp_path = Path(settings.UPLOADS_DIR) / temp_filename
+                temp_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(temp_path, "wb") as f:
                     f.write(file_bytes)
                 

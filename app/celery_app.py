@@ -9,8 +9,8 @@ logger = logging.getLogger(__name__)
 # Create Celery app
 celery_app = Celery(
     "eduai",
-    broker=settings.CELERY_BROKER_URL,
-    backend=settings.CELERY_RESULT_BACKEND,
+    broker=settings.celery_broker,
+    backend=settings.celery_backend,
     include=[
         "app.tasks.document_tasks",
         "app.tasks.quiz_tasks",
