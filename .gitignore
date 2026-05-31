@@ -66,6 +66,9 @@ htmlcov/
 celerybeat-schedule
 celerybeat.pid
 
+#Lien-Backend-Production
+eduai-url
+
 # Alembic
 # Keep migrations folder but ignore generated files if needed
 
