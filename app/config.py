@@ -99,11 +99,11 @@ class Settings(BaseSettings):
     
     # Celery
     CELERY_BROKER_URL: str = Field(
-        default="redis://localhost:6379/0",
+        default="",
         description="Celery broker URL"
     )
     CELERY_RESULT_BACKEND: str = Field(
-        default="redis://localhost:6379/0",
+        default="",
         description="Celery result backend URL"
     )
     
@@ -147,6 +147,16 @@ class Settings(BaseSettings):
         if isinstance(self.ALLOWED_ORIGINS, list):
             return self.ALLOWED_ORIGINS
         return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]
+
+    @property
+    def celery_broker(self) -> str:
+        """Get Celery broker URL, falling back to REDIS_URL if empty."""
+        return self.CELERY_BROKER_URL or self.REDIS_URL
+
+    @property
+    def celery_backend(self) -> str:
+        """Get Celery backend URL, falling back to REDIS_URL if empty."""
+        return self.CELERY_RESULT_BACKEND or self.REDIS_URL
 
 
 # Global settings instance
