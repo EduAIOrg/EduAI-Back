@@ -14,6 +14,8 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+logger.warning(f"DATABASE_URL chargée = {settings.DATABASE_URL}")
+
 # Create async engine
 engine: AsyncEngine = create_async_engine(
     settings.DATABASE_URL,
