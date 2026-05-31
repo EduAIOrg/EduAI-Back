@@ -77,6 +77,20 @@ class Settings(BaseSettings):
         description="Directory for uploaded files"
     )
     
+    # Supabase Storage
+    SUPABASE_URL: str = Field(
+        default="",
+        description="Supabase project URL"
+    )
+    SUPABASE_KEY: str = Field(
+        default="",
+        description="Supabase access key/token"
+    )
+    SUPABASE_BUCKET: str = Field(
+        default="eduai-documents",
+        description="Supabase Storage bucket name"
+    )
+    
     # ChromaDB
     CHROMA_DB_DIR: str = Field(
         default="./chroma_db",
