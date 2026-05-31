@@ -36,3 +36,5 @@ pytest==8.4.0
 pytest-asyncio==1.0.0
 
 email-validator>=2.2.0
+
+supabase>=2.15.0
