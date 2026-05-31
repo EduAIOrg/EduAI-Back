@@ -1,3 +1,11 @@
+---
+title: EduAI Celery
+emoji: 🚀
+colorFrom: blue
+colorTo: green
+sdk: docker
+pinned: false
+---
 # 🎓 EduAI Africa - Backend API
 
 Assistant IA pédagogique intelligent pour l'éducation en Afrique.
