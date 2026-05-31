@@ -100,29 +100,63 @@ async def upload_document(
                 detail=f"File size exceeds maximum of {settings.MAX_UPLOAD_SIZE_MB}MB"
             )
         
-        # Create user upload directory
-        user_upload_dir = Path(settings.UPLOADS_DIR) / str(current_user.id)
-        user_upload_dir.mkdir(parents=True, exist_ok=True)
+        # Check if Supabase storage is configured
+        from app.services.storage_service import StorageService
         
-        # Generate unique filename
         file_id = uuid.uuid4()
         file_extension = Path(file.filename).suffix
-        filename = f"{file_id}{file_extension}"
-        file_path = user_upload_dir / filename
         
-        # Save file
-        with open(file_path, "wb") as f:
-            f.write(content)
-        
-        logger.info(f"Saved file: {file_path}")
-        
-        # Validate PDF
-        if not PDFProcessor.validate_pdf(str(file_path)):
-            file_path.unlink()  # Delete invalid file
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid PDF file"
-            )
+        if StorageService.is_configured():
+            # Validate PDF by writing to a temporary file
+            temp_path = Path(settings.UPLOADS_DIR) / f"temp_{file_id}{file_extension}"
+            with open(temp_path, "wb") as f:
+                f.write(content)
+            
+            if not PDFProcessor.validate_pdf(str(temp_path)):
+                temp_path.unlink()
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid PDF file"
+                )
+            temp_path.unlink()
+            
+            # Upload to Supabase
+            try:
+                cloud_url = await StorageService.upload_file(
+                    user_id=current_user.id,
+                    file_id=file_id,
+                    content=content,
+                    content_type="application/pdf"
+                )
+                filename_path = cloud_url
+            except Exception as e:
+                logger.error(f"Failed to upload to Supabase: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to upload to cloud storage: {e}"
+                )
+        else:
+            # Create user upload directory
+            user_upload_dir = Path(settings.UPLOADS_DIR) / str(current_user.id)
+            user_upload_dir.mkdir(parents=True, exist_ok=True)
+            
+            filename = f"{file_id}{file_extension}"
+            file_path = user_upload_dir / filename
+            
+            # Save file
+            with open(file_path, "wb") as f:
+                f.write(content)
+            
+            logger.info(f"Saved file locally: {file_path}")
+            
+            # Validate PDF
+            if not PDFProcessor.validate_pdf(str(file_path)):
+                file_path.unlink()  # Delete invalid file
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid PDF file"
+                )
+            filename_path = str(file_path)
         
         # Use provided title or filename
         doc_title = title if title else Path(file.filename).stem
@@ -131,7 +165,7 @@ async def upload_document(
         document = Document(
             user_id=current_user.id,
             title=doc_title,
-            filename=str(file_path),
+            filename=filename_path,
             file_size=file_size,
             status=DocumentStatus.UPLOADING
         )
@@ -195,6 +229,11 @@ async def get_document(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied"
             )
+        
+        # Temporary diagnostic logging
+        logger.info(f"Document path: {document.filename}")
+        is_url = document.filename.startswith("http://") or document.filename.startswith("https://")
+        logger.info(f"Exists: {True if is_url else Path(document.filename).exists()}")
         
         return DocumentResponse.model_validate(document)
         

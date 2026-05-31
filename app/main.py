@@ -157,12 +157,12 @@ async def root():
 
 # Mount static files for uploads
 uploads_path = Path(settings.UPLOADS_DIR)
-if uploads_path.exists():
-    app.mount(
-        "/static/uploads",
-        StaticFiles(directory=str(uploads_path)),
-        name="uploads"
-    )
+uploads_path.mkdir(parents=True, exist_ok=True)
+app.mount(
+    "/static/uploads",
+    StaticFiles(directory=str(uploads_path)),
+    name="uploads"
+)
 
 
 # Include routers

@@ -47,8 +47,29 @@ class DocumentService:
             await db.commit()
             
             # Step 1: Extract text from PDF
-            logger.info(f"Extracting text from {document.filename}")
-            text, page_count = PDFProcessor.extract_text_from_pdf(document.filename)
+            is_url = document.filename.startswith("http://") or document.filename.startswith("https://")
+            
+            if is_url:
+                logger.info(f"Downloading remote document from Supabase: {document.filename}")
+                from app.services.storage_service import StorageService
+                file_bytes = await StorageService.download_file(document.filename)
+                
+                # Save to a temporary local file
+                temp_filename = f"temp_process_{document.id}.pdf"
+                temp_path = Path(settings.UPLOADS_DIR) / temp_filename
+                with open(temp_path, "wb") as f:
+                    f.write(file_bytes)
+                
+                logger.info(f"Extracting text from downloaded temp PDF: {temp_path}")
+                try:
+                    text, page_count = PDFProcessor.extract_text_from_pdf(str(temp_path))
+                finally:
+                    # Always clean up temp file
+                    if temp_path.exists():
+                        temp_path.unlink()
+            else:
+                logger.info(f"Extracting text from local PDF: {document.filename}")
+                text, page_count = PDFProcessor.extract_text_from_pdf(document.filename)
             
             if not text or len(text.strip()) < 100:
                 raise ValueError("Insufficient text extracted from PDF")
