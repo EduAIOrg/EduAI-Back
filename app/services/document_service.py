@@ -12,7 +12,6 @@ from app.ai.vector_store import vector_store_manager
 from app.ai.llm_factory import LLMFactory
 from app.ai.prompts import get_summary_prompt
 from app.config import settings
-from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +58,7 @@ class DocumentService:
                 # Save to a temporary local file
                 temp_filename = f"temp_process_{document.id}.pdf"
                 temp_path = Path(settings.UPLOADS_DIR) / temp_filename
+                temp_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(temp_path, "wb") as f:
                     f.write(file_bytes)
                 
