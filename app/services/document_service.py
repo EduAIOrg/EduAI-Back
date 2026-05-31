@@ -12,6 +12,7 @@ from app.ai.vector_store import vector_store_manager
 from app.ai.llm_factory import LLMFactory
 from app.ai.prompts import get_summary_prompt
 from app.config import settings
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 

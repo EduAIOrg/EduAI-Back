@@ -5,7 +5,7 @@ from celery import Task
 from sqlalchemy import select
 
 from app.celery_app import celery_app
-from app.database import AsyncSessionLocal
+from app.database import AsyncSessionLocal, engine
 from app.models.quiz import Quiz, QuizStatus
 from app.services.quiz_service import QuizService
 
@@ -66,8 +66,8 @@ async def _generate_quiz_async(quiz_id: UUID) -> dict:
     Returns:
         dict: Generation result
     """
-    async with AsyncSessionLocal() as db:
-        try:
+    try:
+        async with AsyncSessionLocal() as db:
             # Get quiz
             result = await db.execute(
                 select(Quiz).where(Quiz.id == quiz_id)
@@ -96,10 +96,11 @@ async def _generate_quiz_async(quiz_id: UUID) -> dict:
                 "quiz_id": str(quiz_id),
                 "message": "Quiz generated successfully"
             }
-            
-        except Exception as e:
-            logger.error(f"Error generating quiz {quiz_id}: {e}")
-            raise
+    except Exception as e:
+        logger.error(f"Error generating quiz {quiz_id}: {e}")
+        raise
+    finally:
+        await engine.dispose()
 
 
 async def _update_quiz_status(quiz_id: str, status: QuizStatus) -> None:
@@ -123,6 +124,7 @@ async def _update_quiz_status(quiz_id: str, status: QuizStatus) -> None:
                 quiz.status = status
                 await db.commit()
                 logger.info(f"Updated quiz {quiz_id} status to {status}")
-                
     except Exception as e:
         logger.error(f"Error updating quiz status: {e}")
+    finally:
+        await engine.dispose()
