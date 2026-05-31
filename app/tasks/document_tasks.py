@@ -5,7 +5,7 @@ from celery import Task
 from sqlalchemy import select
 
 from app.celery_app import celery_app
-from app.database import AsyncSessionLocal
+from app.database import AsyncSessionLocal, engine
 from app.models.document import Document, DocumentStatus
 from app.services.document_service import DocumentService
 
@@ -66,8 +66,8 @@ async def _process_document_async(document_id: UUID) -> dict:
     Returns:
         dict: Processing result
     """
-    async with AsyncSessionLocal() as db:
-        try:
+    try:
+        async with AsyncSessionLocal() as db:
             await DocumentService.process_document(document_id, db)
             
             return {
@@ -75,10 +75,11 @@ async def _process_document_async(document_id: UUID) -> dict:
                 "document_id": str(document_id),
                 "message": "Document processed successfully"
             }
-            
-        except Exception as e:
-            logger.error(f"Error processing document {document_id}: {e}")
-            raise
+    except Exception as e:
+        logger.error(f"Error processing document {document_id}: {e}")
+        raise
+    finally:
+        await engine.dispose()
 
 
 async def _update_document_status(document_id: str, status: DocumentStatus) -> None:
@@ -102,6 +103,7 @@ async def _update_document_status(document_id: str, status: DocumentStatus) -> N
                 document.status = status
                 await db.commit()
                 logger.info(f"Updated document {document_id} status to {status}")
-                
     except Exception as e:
         logger.error(f"Error updating document status: {e}")
+    finally:
+        await engine.dispose()

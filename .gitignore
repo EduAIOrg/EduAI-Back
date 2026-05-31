@@ -68,6 +68,7 @@ celerybeat.pid
 
 #Lien-Backend-Production
 eduai-url
+edu.pdf
 
 # Alembic
 # Keep migrations folder but ignore generated files if needed
