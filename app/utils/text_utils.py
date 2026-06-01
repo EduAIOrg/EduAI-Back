@@ -101,7 +101,8 @@ class TextProcessor:
                 # Look for sentence ending punctuation
                 for punct in ['. ', '! ', '? ', '\n\n']:
                     last_punct = text.rfind(punct, start, end)
-                    if last_punct != -1:
+                    # Ensure cutting at this punctuation actually advances beyond the overlap
+                    if last_punct != -1 and (last_punct + len(punct) - chunk_overlap > start):
                         end = last_punct + len(punct)
                         break
             
@@ -110,7 +111,12 @@ class TextProcessor:
                 chunks.append(chunk)
             
             # Move start position with overlap
-            start = end - chunk_overlap if end < text_length else text_length
+            next_start = end - chunk_overlap if end < text_length else text_length
+            # Absolute safety check to guarantee strictly positive forward progress
+            if next_start <= start:
+                next_start = start + chunk_size
+                
+            start = next_start
         
         logger.info(f"Split text into {len(chunks)} chunks")
         return chunks
