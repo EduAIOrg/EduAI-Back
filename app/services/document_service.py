@@ -47,8 +47,9 @@ class DocumentService:
             document.status = DocumentStatus.PROCESSING
             await db.commit()
             
-            # Step 1: Extract text from PDF
+            # Step 1: Extract text page by page
             is_url = document.filename.startswith("http://") or document.filename.startswith("https://")
+            pdf_path = None
             
             if is_url:
                 logger.info(f"Downloading remote document from Supabase: {document.filename}")
@@ -61,64 +62,77 @@ class DocumentService:
                 temp_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(temp_path, "wb") as f:
                     f.write(file_bytes)
-                
-                logger.info(f"Extracting text from downloaded temp PDF: {temp_path}")
-                try:
-                    text, page_count = PDFProcessor.extract_text_from_pdf(str(temp_path))
-                finally:
-                    # Always clean up temp file
-                    if temp_path.exists():
-                        temp_path.unlink()
+                pdf_path = str(temp_path)
             else:
-                logger.info(f"Extracting text from local PDF: {document.filename}")
-                text, page_count = PDFProcessor.extract_text_from_pdf(document.filename)
+                logger.info(f"Using local PDF: {document.filename}")
+                pdf_path = document.filename
             
-            if not text or len(text.strip()) < 100:
+            try:
+                pages_data = PDFProcessor.extract_text_by_pages(pdf_path)
+                page_count = len(pages_data)
+            finally:
+                # Always clean up temp file
+                if is_url and pdf_path and Path(pdf_path).exists():
+                    Path(pdf_path).unlink()
+            
+            if not pages_data:
                 raise ValueError("Insufficient text extracted from PDF")
             
             # Update page count
             document.page_count = page_count
             await db.commit()
             
-            # Step 2: Clean text
-            logger.info("Cleaning extracted text")
-            cleaned_text = TextProcessor.clean_text(text)
-            cleaned_text = TextProcessor.remove_headers_footers(cleaned_text)
+            # Step 2: Clean and chunk text page by page to keep track of page numbers
+            logger.info("Cleaning and chunking text page by page")
+            chunks = []
+            metadatas = []
+            full_text_list = []
             
-            # Step 3: Chunk text
-            logger.info("Chunking text")
-            chunks = TextProcessor.chunk_text(
-                cleaned_text,
-                chunk_size=1000,
-                chunk_overlap=200
-            )
+            chunk_idx = 0
+            for page_num, page_text in pages_data:
+                if not page_text or len(page_text.strip()) < 5:
+                    continue
+                full_text_list.append(page_text)
+                cleaned_page = TextProcessor.clean_text(page_text)
+                cleaned_page = TextProcessor.remove_headers_footers(cleaned_page)
+                
+                page_chunks = TextProcessor.chunk_text(
+                    cleaned_page,
+                    chunk_size=1200,
+                    chunk_overlap=200
+                )
+                for chunk in page_chunks:
+                    chunks.append(chunk)
+                    metadatas.append({
+                        "chunk_index": chunk_idx,
+                        "document_id": str(document_id),
+                        "page_number": page_num
+                    })
+                    chunk_idx += 1
             
             if not chunks:
                 raise ValueError("No chunks created from text")
             
+            logger.info(
+                f"CONTEXT DEBUG | Upload & processing successful for document_id={document_id} | "
+                f"number of pages={page_count} | number of chunks generated={len(chunks)}"
+            )
+            
             # Step 4: Create vector store and embeddings
             logger.info(f"Creating embeddings for {len(chunks)} chunks")
-            metadatas = [
-                {
-                    "chunk_index": i,
-                    "document_id": str(document_id),
-                    "page_count": page_count,
-                }
-                for i in range(len(chunks))
-            ]
-            
-            collection_name = vector_store_manager.create_collection(
+            await vector_store_manager.create_collection(
+                db=db,
                 document_id=document_id,
                 documents=chunks,
                 metadatas=metadatas
             )
-            
-            document.chroma_collection_id = collection_name
             await db.commit()
             
             # Step 5: Generate summary
             logger.info("Generating document summary")
-            summary = await DocumentService._generate_summary(cleaned_text)
+            # Combine the pages for summary generation
+            combined_cleaned_text = TextProcessor.clean_text("\n\n".join(full_text_list))
+            summary = await DocumentService._generate_summary(combined_cleaned_text)
             
             document.summary = summary
             document.status = DocumentStatus.READY
@@ -184,12 +198,13 @@ class DocumentService:
             return "Résumé non disponible en raison d'une erreur de traitement."
     
     @staticmethod
-    async def delete_document_files(document: Document) -> None:
+    async def delete_document_files(document: Document, db: AsyncSession) -> None:
         """
         Delete document files and vector store.
         
         Args:
             document: Document instance
+            db: Database session
         """
         try:
             # Delete physical file
@@ -199,9 +214,8 @@ class DocumentService:
                 logger.info(f"Deleted file: {document.filename}")
             
             # Delete vector store collection
-            if document.chroma_collection_id:
-                vector_store_manager.delete_collection(document.id)
-                logger.info(f"Deleted vector store for document {document.id}")
+            await vector_store_manager.delete_collection(db, document.id)
+            logger.info(f"Deleted vector store for document {document.id}")
                 
         except Exception as e:
             logger.error(f"Error deleting document files: {e}")

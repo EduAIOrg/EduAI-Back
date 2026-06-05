@@ -28,7 +28,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Créer les dossiers nécessaires
-RUN mkdir -p uploads chroma_db logs
+RUN mkdir -p uploads logs
 
 # Exposer le port
 EXPOSE 8000

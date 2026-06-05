@@ -34,21 +34,20 @@ async def lifespan(app: FastAPI):
     
     # Create necessary directories
     Path(settings.UPLOADS_DIR).mkdir(parents=True, exist_ok=True)
-    Path(settings.CHROMA_DB_DIR).mkdir(parents=True, exist_ok=True)
     
+    # Resolve and validate HF LLM Model
+    from app.ai.llm_factory import LLMFactory
+    try:
+        await LLMFactory.validate_and_resolve_model()
+    except Exception as e:
+        logger.error(f"Failed to validate Hugging Face model on startup: {e}")
+        
     # Initialize database
     try:
         await init_db()
         logger.info("Database initialized")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
-    
-    # Initialize ChromaDB
-    try:
-        from app.ai.vector_store import vector_store_manager
-        logger.info("ChromaDB initialized")
-    except Exception as e:
-        logger.error(f"Failed to initialize ChromaDB: {e}")
     
     logger.info(f"{settings.APP_NAME} v{settings.APP_VERSION} started successfully")
     

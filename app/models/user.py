@@ -34,6 +34,18 @@ class User(Base):
         String(255),
         nullable=False
     )
+    role: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="student",
+        server_default="student"
+    )
+    plan: Mapped[str] = mapped_column(
+        String(50),
+        nullable=False,
+        default="free",
+        server_default="free"
+    )
     is_active: Mapped[bool] = mapped_column(
         Boolean,
         default=True,

@@ -61,9 +61,10 @@ class Document(Base):
         Text,
         nullable=True
     )
-    chroma_collection_id: Mapped[str | None] = mapped_column(
-        String(255),
-        nullable=True
+    document_hash: Mapped[str | None] = mapped_column(
+        String(64),
+        nullable=True,
+        index=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -83,6 +84,11 @@ class Document(Base):
     )
     quizzes: Mapped[list["Quiz"]] = relationship(
         "Quiz",
+        back_populates="document",
+        cascade="all, delete-orphan"
+    )
+    chunks: Mapped[list["DocumentChunk"]] = relationship(
+        "DocumentChunk",
         back_populates="document",
         cascade="all, delete-orphan"
     )

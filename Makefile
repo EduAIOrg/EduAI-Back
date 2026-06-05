@@ -1,4 +1,4 @@
-.PHONY: help install dev test clean migrate upgrade downgrade celery docker-up docker-down
+.PHONY: help install dev test clean migrate upgrade downgrade docker-up docker-down
 
 help:
 	@echo "EduAI Africa Backend - Commandes disponibles:"
@@ -11,7 +11,6 @@ help:
 	@echo "  make migrate      - Créer une nouvelle migration"
 	@echo "  make upgrade      - Appliquer les migrations"
 	@echo "  make downgrade    - Revenir à la migration précédente"
-	@echo "  make celery       - Démarrer Celery worker"
 	@echo "  make docker-up    - Démarrer avec Docker Compose"
 	@echo "  make docker-down  - Arrêter Docker Compose"
 	@echo "  make lint         - Vérifier le code avec flake8"
@@ -49,13 +48,6 @@ upgrade:
 
 downgrade:
 	alembic downgrade -1
-
-celery:
-	celery -A app.celery_app worker --loglevel=info --concurrency=4
-
-celery-beat:
-	celery -A app.celery_app beat --loglevel=info
-
 docker-up:
 	docker-compose up -d
 

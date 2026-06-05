@@ -42,7 +42,8 @@ class QuizService:
             logger.info(f"Generating {num_questions} questions for quiz {quiz_id}")
             
             # Get random chunks from document
-            chunks = vector_store_manager.get_random_chunks(
+            chunks = await vector_store_manager.get_random_chunks(
+                db=db,
                 document_id=document_id,
                 n=min(num_questions * 2, 20)  # Get more chunks for variety
             )

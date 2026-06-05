@@ -12,13 +12,6 @@ class Settings(BaseSettings):
         default="postgresql+asyncpg://eduai:eduai_password@localhost:5432/eduai",
         description="PostgreSQL database URL with asyncpg driver"
     )
-    
-    # Redis
-    REDIS_URL: str = Field(
-        default="redis://localhost:6379/0",
-        description="Redis URL for Celery and caching"
-    )
-    
     # Security
     SECRET_KEY: str = Field(
         default="your-super-secret-key-min-32-chars-change-this-in-production",
@@ -37,28 +30,32 @@ class Settings(BaseSettings):
         description="JWT algorithm"
     )
     
-    # OpenAI
-    OPENAI_API_KEY: str = Field(
+    # Hugging Face Settings
+    HF_TOKEN: str = Field(
         default="",
-        description="OpenAI API key"
+        description="Hugging Face API Token"
+    )
+    HF_LLM_MODEL: str = Field(
+        default="Qwen/Qwen2.5-7B-Instruct",
+        description="Hugging Face LLM model name"
+    )
+    HF_EMBEDDING_MODEL: str = Field(
+        default="intfloat/multilingual-e5-large",
+        description="Hugging Face Embedding model name"
+    )
+    HF_RERANK_MODEL: str = Field(
+        default="BAAI/bge-reranker-large",
+        description="Hugging Face Rerank model name"
     )
     
-    # Ollama
-    USE_OLLAMA: bool = Field(
-        default=False,
-        description="Use Ollama instead of OpenAI"
+    # Local Audio Services (Whisper & XTTS-v2)
+    WHISPER_API_URL: str = Field(
+        default="http://localhost:8000/v1",
+        description="Faster-Whisper OpenAI-compatible API base URL"
     )
-    OLLAMA_BASE_URL: str = Field(
-        default="http://localhost:11434",
-        description="Ollama base URL"
-    )
-    OLLAMA_MODEL: str = Field(
-        default="llama3",
-        description="Ollama model name"
-    )
-    OLLAMA_EMBEDDING_MODEL: str = Field(
-        default="nomic-embed-text",
-        description="Ollama embedding model"
+    XTTS_API_URL: str = Field(
+        default="http://localhost:8020",
+        description="XTTS-v2 local API URL"
     )
     
     # CORS
@@ -91,22 +88,7 @@ class Settings(BaseSettings):
         description="Supabase Storage bucket name"
     )
     
-    # ChromaDB
-    CHROMA_DB_DIR: str = Field(
-        default="./chroma_db",
-        description="ChromaDB persistence directory"
-    )
-    
-    # Celery
-    CELERY_BROKER_URL: str = Field(
-        default="",
-        description="Celery broker URL"
-    )
-    CELERY_RESULT_BACKEND: str = Field(
-        default="",
-        description="Celery result backend URL"
-    )
-    
+
     # App
     APP_NAME: str = Field(
         default="EduAI Africa",
@@ -147,16 +129,6 @@ class Settings(BaseSettings):
         if isinstance(self.ALLOWED_ORIGINS, list):
             return self.ALLOWED_ORIGINS
         return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]
-
-    @property
-    def celery_broker(self) -> str:
-        """Get Celery broker URL, falling back to REDIS_URL if empty."""
-        return self.CELERY_BROKER_URL or self.REDIS_URL
-
-    @property
-    def celery_backend(self) -> str:
-        """Get Celery backend URL, falling back to REDIS_URL if empty."""
-        return self.CELERY_RESULT_BACKEND or self.REDIS_URL
 
 
 # Global settings instance

@@ -33,12 +33,11 @@ def check_dependencies():
         "langchain",
         "langchain_openai",
         "langchain_community",
-        "chromadb",
+        "pgvector",
         "fitz",  # PyMuPDF
-        "celery",
-        "redis",
         "jose",
         "passlib",
+        "sse_starlette",
     ]
     
     all_ok = True
@@ -74,8 +73,6 @@ def check_project_structure():
         "app/services/document_service.py",
         "app/services/rag_service.py",
         "app/services/quiz_service.py",
-        "app/tasks/document_tasks.py",
-        "app/tasks/quiz_tasks.py",
         "app/ai/llm_factory.py",
         "app/ai/embeddings.py",
         "app/ai/vector_store.py",
@@ -111,7 +108,6 @@ def check_env_file():
             
         required_vars = [
             "DATABASE_URL",
-            "REDIS_URL",
             "SECRET_KEY",
         ]
         
@@ -136,7 +132,6 @@ def check_directories():
     
     required_dirs = [
         "uploads",
-        "chroma_db",
         "app/migrations/versions",
     ]
     
@@ -230,7 +225,6 @@ def main():
         print("   1. Configurer PostgreSQL: make setup-db")
         print("   2. Appliquer les migrations: make upgrade")
         print("   3. Démarrer l'application: make dev")
-        print("   4. Démarrer Celery: make celery")
         print("\n📚 Consultez testing.md pour plus de détails")
         return 0
     else:

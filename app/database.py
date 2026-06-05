@@ -7,12 +7,24 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
     async_sessionmaker,
 )
-from sqlalchemy.orm import declarative_base
+from sqlalchemy import event
+from sqlalchemy.orm import declarative_base, Session, ORMExecuteState
 from sqlalchemy.pool import NullPool
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+@event.listens_for(Session, "do_orm_execute")
+def receive_do_orm_execute(orm_execute_state: ORMExecuteState):
+    """Detect and log any lazy loading attempts in ORM queries."""
+    if orm_execute_state.is_relationship_load and orm_execute_state.lazy_loaded_from:
+        logger.warning(
+            f"⚠️ TENTATIVE DE LAZY LOADING ORM DÉTECTÉE ! "
+            f"Relation : {orm_execute_state.loader_strategy_path}. "
+            f"Pour éviter l'erreur MissingGreenlet en mode asynchrone, utilisez selectinload() ou joinedload()."
+        )
 
 logger.warning(f"DATABASE_URL chargée = {settings.DATABASE_URL}")
 
@@ -58,10 +70,25 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 
 async def init_db() -> None:
-    """Initialize database tables."""
+    """Initialize database tables and run automatic schema updates."""
+    from sqlalchemy import text
     async with engine.begin() as conn:
+        # Enable pgvector extension
+        try:
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+            logger.info("pgvector extension loaded/created successfully")
+        except Exception as extension_err:
+            logger.warning(f"Could not load/create pgvector extension: {extension_err}")
+
+        # Add role column if not exists in users table
+        try:
+            await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(50) DEFAULT 'student';"))
+            logger.info("users.role column checked/created successfully")
+        except Exception as role_err:
+            logger.warning(f"Could not add role column to users table: {role_err}")
+
         # Import all models to ensure they are registered
-        from app.models import user, document, chat, quiz  # noqa: F401
+        from app.models import user, document, document_chunk, chat, quiz, study  # noqa: F401
         
         # Create all tables
         await conn.run_sync(Base.metadata.create_all)

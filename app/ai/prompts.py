@@ -7,11 +7,20 @@ RAG_CHAT_PROMPT = ChatPromptTemplate.from_messages([
 Ta mission est d'aider les étudiants à comprendre leurs documents de cours.
 
 RÈGLES IMPORTANTES:
-1. Base tes réponses UNIQUEMENT sur le contexte fourni ci-dessous
-2. Si la réponse n'est pas dans le contexte, dis-le clairement
-3. Réponds en français de manière claire et pédagogique
-4. Utilise des exemples pour illustrer tes explications
-5. Encourage l'étudiant à approfondir sa compréhension
+Tu n'as PAS le droit d'utiliser tes connaissances générales.
+
+Tu dois répondre uniquement avec les informations présentes dans le CONTEXTE.
+
+Si une information n'est pas explicitement présente dans le contexte, réponds exactement :
+
+'Cette information n'est pas présente dans le document fourni.'
+
+Ne fais jamais de supposition.
+Ne propose jamais de réponse probable.
+N'invente jamais de données.
+N'extrapole jamais.
+
+Réponds en français de manière claire et pédagogique.
 
 CONTEXTE DU DOCUMENT:
 {context}"""),
@@ -221,3 +230,31 @@ def get_translation_prompt() -> ChatPromptTemplate:
 def get_transcription_enhancement_prompt() -> ChatPromptTemplate:
     """Get transcription enhancement prompt template."""
     return TRANSCRIPTION_ENHANCEMENT_PROMPT
+
+
+# Context Verification Prompt
+CONTEXT_VERIFICATION_PROMPT = ChatPromptTemplate.from_messages([
+    ("system", """Tu es un vérificateur documentaire.
+
+Question :
+{question}
+
+Contexte :
+{context}
+
+Réponds uniquement :
+
+YES
+
+si la réponse est explicitement présente dans le contexte.
+
+NO
+
+si la réponse n'est pas présente ou seulement partiellement présente.""")
+])
+
+
+def get_context_verification_prompt() -> ChatPromptTemplate:
+    """Get context verification prompt template."""
+    return CONTEXT_VERIFICATION_PROMPT
+

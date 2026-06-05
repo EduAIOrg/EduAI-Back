@@ -72,7 +72,7 @@ class TextProcessor:
     @staticmethod
     def chunk_text(
         text: str,
-        chunk_size: int = 1000,
+        chunk_size: int = 1200,
         chunk_overlap: int = 200
     ) -> List[str]:
         """

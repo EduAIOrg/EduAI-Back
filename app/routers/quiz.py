@@ -22,7 +22,6 @@ from app.schemas.quiz import (
 )
 from app.services.quiz_service import QuizService
 from app.services.lacune_service import LacuneService
-from app.tasks.quiz_tasks import generate_quiz_task
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +110,13 @@ async def generate_quiz(
         QuizResponse: Created quiz (status: generating)
     """
     try:
+        from app.services.quota_service import QuotaService
+        if not await QuotaService.check_quota(db, current_user, "quiz"):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Quota journalier de quiz dépassé pour votre forfait."
+            )
+
         # Validate document
         doc_result = await db.execute(
             select(Document).where(Document.id == request.document_id)
@@ -149,11 +155,33 @@ async def generate_quiz(
         await db.commit()
         await db.refresh(quiz)
         
-        # Launch async generation task
-        generate_quiz_task.delay(str(quiz.id))
+        # Log quota usage
+        await QuotaService.increment_usage(db, current_user.id, "quiz")
         
-        logger.info(f"Quiz generation started: {quiz.id}")
-        
+        # Launch generation directly
+        try:
+            await QuizService.generate_quiz_questions(
+                quiz_id=quiz.id,
+                document_id=quiz.document_id,
+                quiz_type=quiz.quiz_type,
+                difficulty=quiz.difficulty,
+                num_questions=10,
+                db=db
+            )
+            quiz.status = QuizStatus.READY
+            await db.commit()
+            await db.refresh(quiz)
+            logger.info(f"Quiz generated successfully: {quiz.id}")
+        except Exception as gen_err:
+            logger.error(f"Error generating quiz questions for {quiz.id}: {gen_err}")
+            quiz.status = QuizStatus.ERROR
+            await db.commit()
+            await db.refresh(quiz)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to generate quiz questions: {str(gen_err)}"
+            )
+            
         return QuizResponse.model_validate(quiz)
         
     except HTTPException:
@@ -363,6 +391,21 @@ async def submit_quiz(
         db.add(quiz_result)
         await db.commit()
         await db.refresh(quiz_result)
+        
+        # Enregistrer les réponses individuelles détaillées
+        from app.models.study import StudentQuizAnswer
+        for eval_data in evaluation["evaluations"]:
+            student_ans_rec = StudentQuizAnswer(
+                user_id=current_user.id,
+                quiz_result_id=quiz_result.id,
+                question_id=uuid.UUID(eval_data["question_id"]),
+                user_answer=eval_data["user_answer"],
+                is_correct=eval_data["is_correct"],
+                score=eval_data["score"],
+                feedback=eval_data["feedback"]
+            )
+            db.add(student_ans_rec)
+        await db.commit()
         
         # Build response
         answer_feedback = [

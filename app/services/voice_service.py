@@ -11,15 +11,18 @@ logger = logging.getLogger(__name__)
 
 
 class VoiceService:
-    """Service for voice operations."""
+    """Service for local voice operations (Whisper and XTTS-v2)."""
     
     def __init__(self):
-        """Initialize OpenAI client."""
-        self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+        """Initialize local Whisper AsyncOpenAI client."""
+        self.whisper_client = AsyncOpenAI(
+            base_url=settings.WHISPER_API_URL,
+            api_key="none"
+        )
     
     async def transcribe_audio(self, audio_file_path: str) -> str:
         """
-        Transcribe audio file using OpenAI Whisper.
+        Transcribe audio file using local Faster-Whisper.
         
         Args:
             audio_file_path: Path to audio file
@@ -28,22 +31,22 @@ class VoiceService:
             str: Transcribed text
         """
         try:
-            logger.info(f"Transcribing audio file: {audio_file_path}")
+            logger.info(f"Transcribing audio file locally: {audio_file_path}")
             
             with open(audio_file_path, "rb") as audio_file:
-                transcript = await self.client.audio.transcriptions.create(
+                transcript = await self.whisper_client.audio.transcriptions.create(
                     model="whisper-1",
                     file=audio_file,
                     language="fr"  # French by default
                 )
             
             transcribed_text = transcript.text
-            logger.info(f"Transcription completed: {len(transcribed_text)} characters")
+            logger.info(f"Local transcription completed: {len(transcribed_text)} characters")
             
             return transcribed_text
             
         except Exception as e:
-            logger.error(f"Error transcribing audio: {e}")
+            logger.error(f"Error transcribing audio with Whisper local: {e}")
             raise
     
     async def synthesize_speech(
@@ -53,33 +56,41 @@ class VoiceService:
         model: str = "tts-1"
     ) -> AsyncGenerator[bytes, None]:
         """
-        Synthesize speech from text using OpenAI TTS.
+        Synthesize speech from text using local XTTS-v2 API.
         
         Args:
             text: Text to synthesize
-            voice: Voice to use (alloy, echo, fable, onyx, nova, shimmer)
-            model: TTS model (tts-1 or tts-1-hd)
+            voice: Voice key or speaker reference
+            model: Model name
             
         Yields:
             bytes: Audio chunks
         """
         try:
-            logger.info(f"Synthesizing speech: {len(text)} characters")
+            logger.info(f"Synthesizing speech via XTTS-v2 local API: {len(text)} characters")
             
-            response = await self.client.audio.speech.create(
-                model=model,
-                voice=voice,
-                input=text
-            )
+            # XTTS-v2 standard endpoint: POST /tts returning raw audio stream
+            # Let's request the endpoint asynchronously
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    f"{settings.XTTS_API_URL}/tts",
+                    json={
+                        "text": text,
+                        "speaker_id": voice if voice != "alloy" else "Female Speaker 1",
+                        "language": "fr"
+                    }
+                )
+                response.raise_for_status()
+                
+                # Stream the response content in chunks
+                async for chunk in response.aiter_bytes(chunk_size=4096):
+                    yield chunk
             
-            # Stream audio chunks
-            async for chunk in response.iter_bytes(chunk_size=4096):
-                yield chunk
-            
-            logger.info("Speech synthesis completed")
+            logger.info("Local XTTS-v2 speech synthesis completed")
             
         except Exception as e:
-            logger.error(f"Error synthesizing speech: {e}")
+            logger.error(f"Error synthesizing speech with XTTS-v2: {e}")
+            # Fallback to general silent bytes or a simple text-to-speech error response if needed
             raise
 
 

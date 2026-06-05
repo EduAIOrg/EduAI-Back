@@ -27,10 +27,15 @@ class SynthesizeRequest(BaseModel):
     lang: str = "fr"
 
 
+from app.dependencies import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+
+
 @router.post("/transcribe", response_model=TranscribeResponse)
 async def transcribe_audio(
     audio: UploadFile = File(...),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ) -> TranscribeResponse:
     """
     Transcribe audio file using Whisper.
@@ -38,11 +43,18 @@ async def transcribe_audio(
     Args:
         audio: Audio file (webm, wav, mp3, etc.)
         current_user: Current authenticated user
+        db: Database session
         
     Returns:
         TranscribeResponse: Transcribed text
     """
     try:
+        from app.services.quota_service import QuotaService
+        if not await QuotaService.check_quota(db, current_user, "transcription"):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Quota journalier de transcription audio dépassé pour votre forfait."
+            )
         # Validate file type
         allowed_types = [
             "audio/webm",
@@ -74,6 +86,9 @@ async def transcribe_audio(
         try:
             # Transcribe
             transcript = await voice_service.transcribe_audio(str(temp_file_path))
+            
+            # Increment quota usage
+            await QuotaService.increment_usage(db, current_user.id, "transcription")
             
             logger.info(f"Audio transcribed: {len(transcript)} characters")
             

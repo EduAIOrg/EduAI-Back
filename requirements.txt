@@ -6,7 +6,7 @@ alembic==1.16.1
 asyncpg==0.30.0
 psycopg2-binary==2.9.10
 
-pydantic==2.11.5
+pydantic>=2.11.7
 pydantic-settings==2.9.1
 python-multipart==0.0.20
 
@@ -19,14 +19,13 @@ langchain-openai==0.1.25
 langchain-community==0.2.16
 langchain-text-splitters==0.2.4
 
-chromadb==0.5.23
+pgvector==0.4.2
 PyMuPDF==1.26.0
 
 openai==1.82.0
 tiktoken==0.9.0
+huggingface_hub>=0.23.0
 
-celery==5.5.3
-redis==6.1.0
 httpx==0.28.1
 
 slowapi==0.1.9
@@ -37,4 +36,7 @@ pytest-asyncio==1.0.0
 
 email-validator>=2.2.0
 
-supabase>=2.15.0
+supabase==2.30.1
+realtime==2.30.1
+websockets==15.0.1
+sse-starlette==2.1.3

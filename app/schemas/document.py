@@ -21,7 +21,6 @@ class DocumentResponse(BaseModel):
     page_count: int = Field(..., description="Number of pages")
     status: DocumentStatus = Field(..., description="Processing status")
     summary: str | None = Field(None, description="Document summary")
-    chroma_collection_id: str | None = Field(None, description="ChromaDB collection ID")
     created_at: datetime = Field(..., description="Creation timestamp")
     
     model_config = {

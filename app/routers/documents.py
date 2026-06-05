@@ -17,7 +17,6 @@ from app.schemas.document import (
     DocumentSummaryResponse
 )
 from app.services.document_service import DocumentService
-from app.tasks.document_tasks import process_document_task
 from app.config import settings
 from app.utils.pdf_utils import PDFProcessor
 
@@ -82,6 +81,13 @@ async def upload_document(
         HTTPException: If file is invalid or upload fails
     """
     try:
+        from app.services.quota_service import QuotaService
+        if not await QuotaService.check_quota(db, current_user, "upload"):
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Quota journalier de téléchargement de documents dépassé pour votre forfait."
+            )
+
         # Validate file type
         if not file.content_type == "application/pdf":
             raise HTTPException(
@@ -92,6 +98,61 @@ async def upload_document(
         # Read file content
         content = await file.read()
         file_size = len(content)
+        
+        # Calculate SHA256 hash of document content
+        import hashlib
+        doc_hash = hashlib.sha256(content).hexdigest()
+        
+        # Check for duplicates in database
+        dup_stmt = select(Document).where(Document.document_hash == doc_hash)
+        dup_res = await db.execute(dup_stmt)
+        existing_doc = dup_res.scalars().first()
+        
+        if existing_doc:
+            if existing_doc.user_id == current_user.id:
+                logger.info(f"Duplicate document found for same user: {existing_doc.id}")
+                return DocumentResponse.model_validate(existing_doc)
+            else:
+                logger.info(f"Global duplicate document found. Copying metadata and chunks from {existing_doc.id}")
+                # Increment upload usage count since they are adding a document to their dashboard
+                await QuotaService.increment_usage(db, current_user.id, "upload")
+                # Create a new document entry referencing the existing filename
+                document = Document(
+                    user_id=current_user.id,
+                    title=title if title else Path(file.filename).stem,
+                    filename=existing_doc.filename,
+                    file_size=file_size,
+                    page_count=existing_doc.page_count,
+                    status=existing_doc.status,
+                    summary=existing_doc.summary,
+                    document_hash=doc_hash
+                )
+                db.add(document)
+                await db.commit()
+                await db.refresh(document)
+                
+                # Copy document chunks for the new user if original is ready
+                if existing_doc.status == DocumentStatus.READY:
+                    from app.models.document_chunk import DocumentChunk
+                    chunks_stmt = select(DocumentChunk).where(DocumentChunk.document_id == existing_doc.id)
+                    chunks_res = await db.execute(chunks_stmt)
+                    existing_chunks = chunks_res.scalars().all()
+                    
+                    for ec in existing_chunks:
+                        nc = DocumentChunk(
+                            document_id=document.id,
+                            chunk_index=ec.chunk_index,
+                            page_number=ec.page_number,
+                            content=ec.content,
+                            embedding=ec.embedding
+                        )
+                        db.add(nc)
+                    await db.commit()
+                else:
+                    # If original is not ready, schedule task to process
+                    await DocumentService.process_document(document.id, db)
+                    
+                return DocumentResponse.model_validate(document)
         
         # Validate file size
         if file_size > settings.max_upload_size_bytes:
@@ -167,15 +228,20 @@ async def upload_document(
             title=doc_title,
             filename=filename_path,
             file_size=file_size,
-            status=DocumentStatus.UPLOADING
+            status=DocumentStatus.UPLOADING,
+            document_hash=doc_hash
         )
         
         db.add(document)
         await db.commit()
         await db.refresh(document)
         
+        # Log quota usage
+        from app.services.quota_service import QuotaService
+        await QuotaService.increment_usage(db, current_user.id, "upload")
+        
         # Launch async processing task
-        process_document_task.delay(str(document.id))
+        await DocumentService.process_document(document.id, db)
         
         logger.info(f"Document created: {document.id}")
         
@@ -394,7 +460,7 @@ async def delete_document(
             )
         
         # Delete files and vector store
-        await DocumentService.delete_document_files(document)
+        await DocumentService.delete_document_files(document, db)
         
         # Delete database record
         await db.delete(document)
