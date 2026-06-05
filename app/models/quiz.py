@@ -87,22 +87,26 @@ class Quiz(Base):
     # Relationships
     user: Mapped["User"] = relationship(
         "User",
-        back_populates="quizzes"
+        back_populates="quizzes",
+        lazy="raise"
     )
     document: Mapped["Document"] = relationship(
         "Document",
-        back_populates="quizzes"
+        back_populates="quizzes",
+        lazy="raise"
     )
     questions: Mapped[list["Question"]] = relationship(
         "Question",
         back_populates="quiz",
         cascade="all, delete-orphan",
-        order_by="Question.order_index"
+        order_by="Question.order_index",
+        lazy="raise"
     )
     results: Mapped[list["QuizResult"]] = relationship(
         "QuizResult",
         back_populates="quiz",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
+        lazy="raise"
     )
     
     def __repr__(self) -> str:
@@ -154,7 +158,8 @@ class Question(Base):
     # Relationships
     quiz: Mapped["Quiz"] = relationship(
         "Quiz",
-        back_populates="questions"
+        back_populates="questions",
+        lazy="raise"
     )
     
     def __repr__(self) -> str:
@@ -210,11 +215,13 @@ class QuizResult(Base):
     # Relationships
     quiz: Mapped["Quiz"] = relationship(
         "Quiz",
-        back_populates="results"
+        back_populates="results",
+        lazy="raise"
     )
     user: Mapped["User"] = relationship(
         "User",
-        back_populates="quiz_results"
+        back_populates="quiz_results",
+        lazy="raise"
     )
     
     def __repr__(self) -> str:

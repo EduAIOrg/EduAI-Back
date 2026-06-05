@@ -5,6 +5,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 
 from app.dependencies import get_db, get_current_user
 from app.models.user import User
@@ -46,6 +47,7 @@ async def list_quizzes(
     try:
         result = await db.execute(
             select(Quiz)
+            .options(selectinload(Quiz.questions))
             .where(Quiz.user_id == current_user.id)
             .order_by(Quiz.created_at.desc())
         )
@@ -54,12 +56,8 @@ async def list_quizzes(
         # Build response with question count and last score
         response = []
         for quiz in quizzes:
-            # Count questions
-            q_count_result = await db.execute(
-                select(func.count(Question.id))
-                .where(Question.quiz_id == quiz.id)
-            )
-            question_count = q_count_result.scalar()
+            # Avoid N+1 query by utilizing the preloaded questions relationship
+            question_count = len(quiz.questions)
             
             # Get last score
             last_result = await db.execute(
@@ -170,7 +168,13 @@ async def generate_quiz(
             )
             quiz.status = QuizStatus.READY
             await db.commit()
-            await db.refresh(quiz)
+            # Explicitly load quiz with questions using selectinload to avoid lazy loading
+            result = await db.execute(
+                select(Quiz)
+                .options(selectinload(Quiz.questions))
+                .where(Quiz.id == quiz.id)
+            )
+            quiz = result.scalar_one()
             logger.info(f"Quiz generated successfully: {quiz.id}")
         except Exception as gen_err:
             logger.error(f"Error generating quiz questions for {quiz.id}: {gen_err}")
@@ -213,7 +217,9 @@ async def get_quiz(
     """
     try:
         result = await db.execute(
-            select(Quiz).where(Quiz.id == quiz_id)
+            select(Quiz)
+            .options(selectinload(Quiz.questions))
+            .where(Quiz.id == quiz_id)
         )
         quiz = result.scalar_one_or_none()
         
