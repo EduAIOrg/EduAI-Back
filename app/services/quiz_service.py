@@ -127,8 +127,64 @@ class QuizService:
         """
         try:
             if question.question_type == QuestionType.MCQ:
-                # Direct comparison for MCQ
-                is_correct = student_answer.strip().upper() == question.correct_answer.strip().upper()
+                letters = ['a', 'b', 'c', 'd']
+                
+                def extract_letter_and_text(ans: str) -> tuple[str | None, str]:
+                    if not ans:
+                        return None, ""
+                    ans_clean = ans.strip().lower()
+                    extracted_letter = None
+                    extracted_text = ans_clean
+                    
+                    for letter in letters:
+                        for prefix in [f"{letter})", f"{letter}.", f"{letter}-"]:
+                            if ans_clean.startswith(prefix):
+                                extracted_letter = letter
+                                extracted_text = ans_clean[len(prefix):].strip()
+                                break
+                        if extracted_letter:
+                            break
+                    
+                    if not extracted_letter:
+                        if ans_clean in letters:
+                            extracted_letter = ans_clean
+                            extracted_text = ""
+                        elif len(ans_clean) == 2 and ans_clean[0] in letters and ans_clean[1] in [')', '.', '-']:
+                            extracted_letter = ans_clean[0]
+                            extracted_text = ""
+                    
+                    if extracted_text.endswith(')') or extracted_text.endswith('.') or extracted_text.endswith('-'):
+                        extracted_text = extracted_text[:-1].strip()
+                        
+                    return extracted_letter, extracted_text
+
+                student_letter, student_text = extract_letter_and_text(student_answer)
+                correct_letter, correct_text = extract_letter_and_text(question.correct_answer)
+                
+                correct_idx = None
+                if question.options:
+                    if correct_letter:
+                        correct_idx = letters.index(correct_letter)
+                    else:
+                        for idx, opt in enumerate(question.options):
+                            _, opt_text = extract_letter_and_text(opt)
+                            if opt_text == correct_text or opt.strip().lower() == question.correct_answer.strip().lower():
+                                correct_idx = idx
+                                break
+                
+                is_correct = False
+                if correct_idx is not None and question.options:
+                    target_letter = letters[correct_idx]
+                    target_text = question.options[correct_idx].strip().lower()
+                    _, target_opt_text = extract_letter_and_text(question.options[correct_idx])
+                    
+                    if student_letter == target_letter:
+                        is_correct = True
+                    elif student_text == target_opt_text or student_answer.strip().lower() == target_text:
+                        is_correct = True
+                else:
+                    is_correct = student_answer.strip().lower() == question.correct_answer.strip().lower()
+
                 score = 1.0 if is_correct else 0.0
                 
                 feedback = (

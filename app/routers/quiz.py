@@ -513,21 +513,45 @@ async def get_quiz_results(
         questions = q_result.scalars().all()
         question_map = {str(q.id): q for q in questions}
         
+        # Fetch actual detailed individual answers to avoid incorrect evaluations
+        quiz_result_ids = [qr.id for qr in quiz_results]
+        student_answers_map = {}
+        if quiz_result_ids:
+            from app.models.study import StudentQuizAnswer
+            sqa_result = await db.execute(
+                select(StudentQuizAnswer)
+                .where(StudentQuizAnswer.quiz_result_id.in_(quiz_result_ids))
+            )
+            student_answers = sqa_result.scalars().all()
+            for sa in student_answers:
+                student_answers_map[(sa.quiz_result_id, sa.question_id)] = sa
+
         # Build response
         response = []
         for qr in quiz_results:
-            # Reconstruct answer feedback
+            # Reconstruct answer feedback from actual student quiz answers
             answer_feedback = []
-            for q_id, user_answer in qr.answers.items():
-                question = question_map.get(q_id)
+            for q_id_str, user_answer in qr.answers.items():
+                q_id = uuid.UUID(q_id_str)
+                question = question_map.get(q_id_str)
                 if question:
+                    sa = student_answers_map.get((qr.id, q_id))
+                    if sa:
+                        is_correct = sa.is_correct
+                        score = sa.score
+                        feedback = sa.feedback or "Aucun feedback"
+                    else:
+                        is_correct = False
+                        score = 0.0
+                        feedback = "Détails de soumission non trouvés"
+
                     answer_feedback.append(AnswerFeedback(
-                        question_id=uuid.UUID(q_id),
-                        is_correct=True,  # Placeholder
-                        score=qr.score,
+                        question_id=q_id,
+                        is_correct=is_correct,
+                        score=score,
                         user_answer=user_answer,
                         correct_answer=question.correct_answer,
-                        feedback="Voir les détails de la soumission"
+                        feedback=feedback
                     ))
             
             lacune_items = [
