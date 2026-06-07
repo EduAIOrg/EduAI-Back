@@ -3,7 +3,6 @@ import logging
 import uuid
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.dependencies import get_current_user
@@ -21,10 +20,7 @@ class TranscribeResponse(BaseModel):
     transcript: str
 
 
-class SynthesizeRequest(BaseModel):
-    """Speech synthesis request."""
-    text: str
-    lang: str = "fr"
+
 
 
 from app.dependencies import get_db
@@ -126,61 +122,3 @@ async def test_transcribe_connectivity(
             detail=f"Failed to test Whisper transcription model connectivity: {str(e)}"
         )
 
-
-@router.post("/synthesize")
-async def synthesize_speech(
-    request: SynthesizeRequest,
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Synthesize speech from text using OpenAI TTS.
-    
-    Args:
-        request: Text to synthesize
-        current_user: Current authenticated user
-        
-    Returns:
-        StreamingResponse: Audio stream (MP3)
-    """
-    try:
-        if not request.text or len(request.text.strip()) == 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Text cannot be empty"
-            )
-        
-        if len(request.text) > 4096:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Text too long (max 4096 characters)"
-            )
-        
-        # Stream audio
-        async def audio_generator():
-            """Generate audio chunks."""
-            async for chunk in voice_service.synthesize_speech(
-                text=request.text,
-                voice="alloy",
-                model="tts-1",
-                lang=request.lang
-            ):
-                yield chunk
-        
-        logger.info(f"Synthesizing speech: {len(request.text)} characters")
-        
-        return StreamingResponse(
-            audio_generator(),
-            media_type="audio/mpeg",
-            headers={
-                "Content-Disposition": "attachment; filename=speech.mp3"
-            }
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error synthesizing speech: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to synthesize speech"
-        )

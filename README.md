@@ -31,7 +31,6 @@ Assistant IA pédagogique intelligent pour l'éducation en Afrique.
 
 ### 🎤 Fonctionnalités Vocales
 - Transcription audio (Whisper)
-- Synthèse vocale (TTS)
 - Support multilingue
 
 ### 📊 Suivi de Progression
@@ -201,7 +200,6 @@ Voir [testing.md](testing.md) pour un guide complet de test.
 
 ### Voice
 - `POST /api/voice/transcribe` - Transcrire audio
-- `POST /api/voice/synthesize` - Synthétiser parole
 
 ## 🔒 Sécurité
 

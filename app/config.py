@@ -65,11 +65,7 @@ class Settings(BaseSettings):
         default="",
         description="Custom Whisper API base URL (empty defaults to HF Inference API)"
     )
-    KOKORO_API_URL: str = Field(
-        default="http://localhost:8880/v1",
-        description="Local Kokoro TTS API base URL"
-    )
-    
+
     # CORS
     ALLOWED_ORIGINS: str = Field(
         default="http://localhost:3000,http://localhost:5173,http://localhost:3001",

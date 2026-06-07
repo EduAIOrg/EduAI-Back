@@ -36,7 +36,7 @@ EduAI-Back/
 │   │   ├── chat.py               ✅ Chat + streaming SSE
 │   │   ├── quiz.py               ✅ Generate, submit, results
 │   │   ├── translate.py          ✅ Translation FR ↔ EN
-│   │   └── voice.py              ✅ Transcribe + synthesize
+│   │   └── voice.py              ✅ Transcribe
 │   │
 │   ├── services/                  ✅ Logique métier
 │   │   ├── auth_service.py       ✅ JWT + password hashing
@@ -45,7 +45,7 @@ EduAI-Back/
 │   │   ├── quiz_service.py       ✅ Quiz generation + evaluation
 │   │   ├── lacune_service.py     ✅ Learning gap analysis
 │   │   ├── translate_service.py  ✅ Translation with LLM
-│   │   └── voice_service.py      ✅ Whisper + TTS
+│   │   └── voice_service.py      ✅ Whisper
 │   │
 │   ├── tasks/                     ✅ Tâches Celery
 │   │   ├── document_tasks.py     ✅ process_document_task
@@ -151,8 +151,6 @@ EduAI-Back/
 ### ✅ Fonctionnalités Vocales
 - [x] Transcription audio (Whisper)
 - [x] Support multi-formats (webm, wav, mp3)
-- [x] Synthèse vocale (TTS)
-- [x] Streaming audio (MP3)
 - [x] Support multilingue
 
 ### ✅ Sécurité
@@ -270,7 +268,7 @@ curl http://localhost:8000/health
 - **Framework**: LangChain 0.3+
 - **LLM**: OpenAI GPT-4o-mini ou Ollama
 - **Embeddings**: OpenAI text-embedding-3-small ou Ollama nomic-embed-text
-- **Voice**: OpenAI Whisper + TTS
+- **Voice**: OpenAI Whisper (transcription)
 
 ### Sécurité
 - **Auth**: JWT (python-jose)
@@ -319,7 +317,6 @@ curl http://localhost:8000/health
 
 ### Voice
 - `POST /api/voice/transcribe`
-- `POST /api/voice/synthesize`
 
 ### Utility
 - `GET /health`

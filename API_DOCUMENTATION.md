@@ -469,19 +469,6 @@ audio: <fichier.webm>
 }
 ```
 
-### POST /voice/synthesize
-Synthétiser de la parole.
-
-**Request Body:**
-```json
-{
-  "text": "Texte à synthétiser",
-  "lang": "fr"
-}
-```
-
-**Response (200):** Audio stream (audio/mpeg)
-
 ---
 
 ## ❌ Codes d'Erreur
