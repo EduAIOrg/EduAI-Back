@@ -88,11 +88,83 @@ async def init_db() -> None:
             logger.warning(f"Could not add role column to users table: {role_err}")
 
         # Import all models to ensure they are registered
-        from app.models import user, document, document_chunk, chat, quiz, study  # noqa: F401
+        from app.models import user, document, document_chunk, chat, quiz, study, notification, plan, subscription, payment, invoice  # noqa: F401
         
         # Create all tables
         await conn.run_sync(Base.metadata.create_all)
         logger.info("Database tables created successfully")
+
+        # Seed default plans if table is empty
+        result = await conn.execute(text("SELECT count(*) FROM plans;"))
+        count = result.scalar()
+        if count == 0:
+            logger.info("Seeding default plans...")
+            import json
+            plans_data = [
+                {
+                    "id": "00000000-0000-0000-0000-000000000001",
+                    "name": "Free",
+                    "price": 0.0,
+                    "currency": "EUR",
+                    "description": "Forfait de base gratuit pour découvrir la plateforme.",
+                    "features": json.dumps([
+                        "3 transcriptions / jour",
+                        "5 résumés / jour",
+                        "5 analyses / jour",
+                        "10 chats / jour"
+                    ]),
+                    "daily_limits": json.dumps({
+                        "transcription": 3,
+                        "upload": 5,
+                        "chat": 10
+                    })
+                },
+                {
+                    "id": "00000000-0000-0000-0000-000000000002",
+                    "name": "Pro",
+                    "price": 9.99,
+                    "currency": "EUR",
+                    "description": "Pour les étudiants et professionnels exigeants.",
+                    "features": json.dumps([
+                        "100 transcriptions / jour",
+                        "100 résumés / jour",
+                        "100 analyses / jour",
+                        "100 chats / jour",
+                        "Support standard"
+                    ]),
+                    "daily_limits": json.dumps({
+                        "transcription": 100,
+                        "upload": 100,
+                        "chat": 100
+                    })
+                },
+                {
+                    "id": "00000000-0000-0000-0000-000000000003",
+                    "name": "Enterprise",
+                    "price": 99.99,
+                    "currency": "EUR",
+                    "description": "Pour les établissements scolaires et les entreprises.",
+                    "features": json.dumps([
+                        "Quotas personnalisés",
+                        "Gestion multi-utilisateurs",
+                        "Support prioritaire 24/7"
+                    ]),
+                    "daily_limits": json.dumps({
+                        "transcription": 99999,
+                        "upload": 99999,
+                        "chat": 99999
+                    })
+                }
+            ]
+            for p_dict in plans_data:
+                await conn.execute(
+                    text(
+                        "INSERT INTO plans (id, name, price, currency, description, features, daily_limits) "
+                        "VALUES (:id, :name, :price, :currency, :description, :features, :daily_limits);"
+                    ),
+                    p_dict
+                )
+            logger.info("Seeding complete.")
 
 
 async def close_db() -> None:

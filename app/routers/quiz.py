@@ -168,6 +168,18 @@ async def generate_quiz(
             )
             quiz.status = QuizStatus.READY
             await db.commit()
+            
+            try:
+                from app.services.notification_service import NotificationService
+                await NotificationService.create_notification(
+                    db=db,
+                    user_id=current_user.id,
+                    title="Quiz généré",
+                    message=f"Le quiz '{quiz.title}' a été généré avec succès.",
+                    type="ia"
+                )
+            except Exception as notify_err:
+                logger.error(f"Failed to create quiz notification: {notify_err}")
             # Explicitly load quiz with questions using selectinload to avoid lazy loading
             result = await db.execute(
                 select(Quiz)

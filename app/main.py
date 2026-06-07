@@ -11,7 +11,8 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.config import settings
 from app.database import init_db, close_db
-from app.routers import auth, documents, chat, quiz, translate, voice
+from app.routers import auth, documents, chat, quiz, translate, voice, notifications, billing
+
 
 # Configure logging
 logging.basicConfig(
@@ -171,6 +172,8 @@ app.include_router(chat.router, prefix="/api")
 app.include_router(quiz.router, prefix="/api")
 app.include_router(translate.router, prefix="/api")
 app.include_router(voice.router, prefix="/api")
+app.include_router(notifications.router, prefix="/api")
+app.include_router(billing.router, prefix="/api")
 
 
 # Log registered routes

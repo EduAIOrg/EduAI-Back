@@ -35,6 +35,8 @@ class UserResponse(BaseModel):
     id: UUID = Field(..., description="User ID")
     email: str = Field(..., description="User email")
     full_name: str = Field(..., description="User full name")
+    role: str = Field(..., description="User role")
+    plan: str = Field(..., description="User subscription plan")
     is_active: bool = Field(..., description="User active status")
     created_at: datetime = Field(..., description="User creation timestamp")
     updated_at: datetime = Field(..., description="User last update timestamp")

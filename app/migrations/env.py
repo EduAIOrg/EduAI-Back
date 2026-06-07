@@ -11,7 +11,7 @@ from alembic import context
 # Import app config and models
 from app.config import settings
 from app.database import Base
-from app.models import user, document, chat, quiz, observability, feedback, quota  # noqa: F401
+from app.models import user, document, chat, quiz, observability, feedback, quota, plan, subscription, payment, invoice, notification  # noqa: F401
 
 # this is the Alembic Config object
 config = context.config

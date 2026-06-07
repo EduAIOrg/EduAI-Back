@@ -17,7 +17,7 @@ class QuotaService:
     LIMITS = {
         "free": {
             "chat": 10,
-            "upload": 3,
+            "upload": 5,
             "quiz": 3,
             "transcription": 3
         },
@@ -42,11 +42,36 @@ class QuotaService:
         Returns:
             bool: True if allowed, False if quota exceeded
         """
-        user_plan = getattr(user, "plan", "free").lower()
-        if user_plan not in QuotaService.LIMITS:
-            user_plan = "free"
+        # Attempt to load limits dynamically from the active subscription plan
+        limits = None
+        try:
+            from app.models.subscription import Subscription
+            from app.models.plan import Plan
             
-        limit = QuotaService.LIMITS[user_plan].get(action_type, 10)
+            sub_stmt = (
+                select(Subscription)
+                .where(Subscription.user_id == user.id)
+                .where(Subscription.status == "active")
+            )
+            sub_res = await db.execute(sub_stmt)
+            sub = sub_res.scalar_one_or_none()
+            
+            if sub:
+                plan_stmt = select(Plan).where(Plan.id == sub.plan_id)
+                plan_res = await db.execute(plan_stmt)
+                plan = plan_res.scalar_one_or_none()
+                if plan and plan.daily_limits:
+                    limits = plan.daily_limits
+        except Exception as e:
+            logger.error(f"Failed to fetch active subscription plan limits dynamically: {e}")
+            
+        if not limits:
+            user_plan = getattr(user, "plan", "free").lower()
+            if user_plan not in QuotaService.LIMITS:
+                user_plan = "free"
+            limits = QuotaService.LIMITS[user_plan]
+            
+        limit = limits.get(action_type, 10)
         
         # Get start of today
         today_start = datetime.combine(datetime.utcnow().date(), time.min)
@@ -61,7 +86,7 @@ class QuotaService:
         res = await db.execute(stmt)
         usage_count = res.scalar() or 0
         
-        logger.info(f"User {user.id} usage for '{action_type}': {usage_count}/{limit} (plan: {user_plan})")
+        logger.info(f"User {user.id} usage for '{action_type}': {usage_count}/{limit}")
         return usage_count < limit
 
     @staticmethod

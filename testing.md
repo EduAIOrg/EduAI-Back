@@ -150,14 +150,58 @@ curl -X GET http://localhost:8000/api/chat/feedback/stats \
 
 ### 7. Enforcement des Quotas SaaS (Limites journalières)
 
-Les limites du plan **Free** (par défaut) sont appliquées par jour glissant :
-- Chats : 10 messages / jour
-- Uploads de PDF : 3 documents / jour
-- Quiz : 3 quiz / jour
-- Transcriptions : 3 audios / jour
+Les limites sont désormais chargées dynamiquement depuis l'abonnement actif de l'utilisateur :
+- **Free** :
+  - Chats : 10 messages / jour
+  - Uploads & Analyses PDF : 5 documents / jour
+  - Quiz : 3 quiz / jour
+  - Transcriptions : 3 audios / jour
+- **Pro** :
+  - Chats : 100 messages / jour
+  - Uploads & Analyses PDF : 100 documents / jour
+  - Quiz : 100 quiz / jour
+  - Transcriptions : 100 audios / jour
+- **Enterprise** :
+  - Quotas personnalisés configurés via la base de données.
 
 Si le quota est dépassé, l'API renvoie un code d'erreur `429 Too Many Requests`.
-Les utilisateurs ayant le rôle premium (colonne `plan` de la table `users`) ont des quotas illimités.
+
+### 8. Système de Paiement et Abonnements
+
+Les endpoints suivants permettent de gérer le cycle de vie des abonnements et de simuler les webhooks de paiement :
+
+#### Consulter les forfaits :
+```bash
+curl -X GET http://localhost:8000/api/billing/plans \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+#### Créer/Souscrire un forfait :
+```bash
+curl -X POST http://localhost:8000/api/billing/subscriptions/create \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "plan_id": "00000000-0000-0000-0000-000000000002",
+    "provider": "stripe"
+  }'
+```
+
+#### Simuler un webhook de paiement réussi :
+```bash
+curl -X POST http://localhost:8000/api/billing/webhooks/stripe \
+  -H "Content-Type: application/json" \
+  -d '{
+    "transaction_id": "tx_YOUR_TRANSACTION_ID",
+    "status": "completed"
+  }'
+```
+
+#### Annuler l'abonnement :
+```bash
+curl -X POST http://localhost:8000/api/billing/subscriptions/cancel \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
 
 ---
 

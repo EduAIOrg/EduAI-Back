@@ -140,6 +140,25 @@ class DocumentService:
             
             logger.info(f"Document {document_id} processed successfully")
             
+            try:
+                from app.services.notification_service import NotificationService
+                await NotificationService.create_notification(
+                    db=db,
+                    user_id=document.user_id,
+                    title="Document analysé",
+                    message=f"L'analyse du document '{document.title}' s'est terminée avec succès.",
+                    type="document"
+                )
+                await NotificationService.create_notification(
+                    db=db,
+                    user_id=document.user_id,
+                    title="Résumé généré",
+                    message=f"Le résumé pour le document '{document.title}' a été généré avec succès.",
+                    type="ia"
+                )
+            except Exception as notify_err:
+                logger.error(f"Failed to create document notification: {notify_err}")
+            
         except Exception as e:
             logger.error(f"Error processing document {document_id}: {e}")
             

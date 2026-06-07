@@ -8,6 +8,11 @@ from app.models.study import Flashcard, StudentQuizAnswer
 from app.models.observability import LLMRequest, EmbeddingRequest, RerankingRequest
 from app.models.feedback import RAGFeedback
 from app.models.quota import UsageLog
+from app.models.notification import Notification
+from app.models.plan import Plan
+from app.models.subscription import Subscription
+from app.models.payment import Payment
+from app.models.invoice import Invoice
 
 __all__ = [
     "User",
@@ -28,4 +33,9 @@ __all__ = [
     "RerankingRequest",
     "RAGFeedback",
     "UsageLog",
+    "Notification",
+    "Plan",
+    "Subscription",
+    "Payment",
+    "Invoice",
 ]

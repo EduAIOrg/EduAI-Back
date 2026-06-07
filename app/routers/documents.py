@@ -131,6 +131,18 @@ async def upload_document(
                 await db.commit()
                 await db.refresh(document)
                 
+                try:
+                    from app.services.notification_service import NotificationService
+                    await NotificationService.create_notification(
+                        db=db,
+                        user_id=current_user.id,
+                        title="Document importé",
+                        message=f"Le document '{document.title}' a été importé avec succès.",
+                        type="document"
+                    )
+                except Exception as notify_err:
+                    logger.error(f"Failed to create notification: {notify_err}")
+                
                 # Copy document chunks for the new user if original is ready
                 if existing_doc.status == DocumentStatus.READY:
                     from app.models.document_chunk import DocumentChunk
@@ -235,6 +247,18 @@ async def upload_document(
         db.add(document)
         await db.commit()
         await db.refresh(document)
+        
+        try:
+            from app.services.notification_service import NotificationService
+            await NotificationService.create_notification(
+                db=db,
+                user_id=current_user.id,
+                title="Document importé",
+                message=f"Le document '{document.title}' a été importé avec succès.",
+                type="document"
+            )
+        except Exception as notify_err:
+            logger.error(f"Failed to create notification: {notify_err}")
         
         # Log quota usage
         from app.services.quota_service import QuotaService
@@ -463,9 +487,22 @@ async def delete_document(
         await DocumentService.delete_document_files(document, db)
         
         # Delete database record
+        doc_title = document.title
         await db.delete(document)
         await db.commit()
         
+        try:
+            from app.services.notification_service import NotificationService
+            await NotificationService.create_notification(
+                db=db,
+                user_id=current_user.id,
+                title="Document supprimé",
+                message=f"Le document '{doc_title}' a été supprimé.",
+                type="document"
+            )
+        except Exception as notify_err:
+            logger.error(f"Failed to create notification: {notify_err}")
+            
         logger.info(f"Document deleted: {document_id}")
         
     except HTTPException:
