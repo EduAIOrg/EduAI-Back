@@ -109,6 +109,24 @@ async def transcribe_audio(
         )
 
 
+@router.get("/transcribe/test")
+async def test_transcribe_connectivity(
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Test if the Whisper transcription model on Hugging Face is reachable.
+    """
+    try:
+        status_info = await voice_service.test_transcription_model_status()
+        return status_info
+    except Exception as e:
+        logger.error(f"Error checking Whisper transcription model connectivity: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to test Whisper transcription model connectivity: {str(e)}"
+        )
+
+
 @router.post("/synthesize")
 async def synthesize_speech(
     request: SynthesizeRequest,
@@ -143,7 +161,8 @@ async def synthesize_speech(
             async for chunk in voice_service.synthesize_speech(
                 text=request.text,
                 voice="alloy",
-                model="tts-1"
+                model="tts-1",
+                lang=request.lang
             ):
                 yield chunk
         

@@ -47,20 +47,32 @@ class Settings(BaseSettings):
         default="BAAI/bge-reranker-large",
         description="Hugging Face Rerank model name"
     )
-    
-    # Local Audio Services (Whisper & XTTS-v2)
-    WHISPER_API_URL: str = Field(
-        default="http://localhost:8000/v1",
-        description="Faster-Whisper OpenAI-compatible API base URL"
+    HF_WHISPER_MODEL: str = Field(
+        default="openai/whisper-large-v3",
+        description="Hugging Face Whisper model name for transcription"
     )
-    XTTS_API_URL: str = Field(
-        default="http://localhost:8020",
-        description="XTTS-v2 local API URL"
+    HF_VOICE_TIMEOUT: int = Field(
+        default=60,
+        description="Timeout for HF voice requests in seconds"
+    )
+    HF_VOICE_RETRIES: int = Field(
+        default=3,
+        description="Number of retries for HF voice requests"
+    )
+    
+    # Audio Services URL (backward compatibility / custom endpoints)
+    WHISPER_API_URL: str = Field(
+        default="",
+        description="Custom Whisper API base URL (empty defaults to HF Inference API)"
+    )
+    KOKORO_API_URL: str = Field(
+        default="http://localhost:8880/v1",
+        description="Local Kokoro TTS API base URL"
     )
     
     # CORS
     ALLOWED_ORIGINS: str = Field(
-        default="http://localhost:3000,http://localhost:5173",
+        default="http://localhost:3000,http://localhost:5173,http://localhost:3001",
         description="Comma-separated list of allowed CORS origins"
     )
     
