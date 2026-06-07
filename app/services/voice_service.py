@@ -33,9 +33,6 @@ class VoiceService:
         Uses Hugging Face Router by default. Falls back to OpenAI-compatible
         custom endpoint if settings.WHISPER_API_URL is configured.
         
-        In case of transcription failure on a .webm file, it automatically
-        converts the file to .wav format using pydub + ffmpeg and retries.
-        
         Args:
             audio_file_path: Path to local audio file
             
@@ -46,55 +43,13 @@ class VoiceService:
         if not path.exists():
             raise FileNotFoundError(f"Audio file not found at: {audio_file_path}")
             
-        try:
-            # Attempt transcription with original file
-            return await self._transcribe_audio_internal(audio_file_path)
-        except Exception as first_error:
-            # If it failed and is a .webm file, attempt conversion and retry
-            if path.suffix.lower() == ".webm":
-                logger.warning(
-                    f"Transcription failed for .webm file: {first_error}. "
-                    "Attempting automatic conversion to .wav before retrying..."
-                )
-                
-                converted_path = None
-                try:
-                    from pydub import AudioSegment
-                    converted_path = path.with_suffix(".wav")
-                    
-                    logger.info(f"Converting {audio_file_path} to {converted_path} via pydub...")
-                    audio = AudioSegment.from_file(audio_file_path)
-                    audio.export(converted_path, format="wav")
-                    logger.info(f"Conversion completed successfully: {converted_path}")
-                    
-                    # Try transcription on the converted WAV file
-                    transcript = await self._transcribe_audio_internal(str(converted_path))
-                    logger.info("Transcription succeeded on converted WAV file.")
-                    return transcript
-                    
-                except Exception as conversion_error:
-                    logger.error(
-                        f"WAV conversion or subsequent transcription failed: {conversion_error}"
-                    )
-                    # Raise the original error to preserve error traceback context
-                    raise first_error
-                finally:
-                    # Clean up converted file
-                    if converted_path and converted_path.exists():
-                        try:
-                            converted_path.unlink()
-                            logger.info(f"Cleaned up temporary converted WAV file: {converted_path}")
-                        except Exception as cleanup_error:
-                            logger.error(f"Failed to delete temporary WAV file {converted_path}: {cleanup_error}")
-            else:
-                # If not .webm, just raise the error
-                raise
+        return await self._transcribe_audio_internal(audio_file_path)
 
     async def _transcribe_audio_internal(self, audio_file_path: str) -> str:
         """Helper to run the core transcription logic (open connection, send POST, handle response)."""
         path = Path(audio_file_path)
         file_size = path.stat().st_size
-        logger.info(f"Preparing to transcribe audio file: {audio_file_path} ({file_size} bytes)")
+        suffix = path.suffix.lower()
         
         # 1. Custom Endpoint Fallback
         if settings.WHISPER_API_URL:
@@ -103,18 +58,25 @@ class VoiceService:
             
         # 2. Hugging Face Router API
         url = f"https://router.huggingface.co/hf-inference/models/{settings.HF_WHISPER_MODEL}"
-        logger.info(f"Targeting Hugging Face Router API: {url} (model: {settings.HF_WHISPER_MODEL})")
         
-        # Guess MIME type
-        import mimetypes
-        try:
-            mime_type, _ = mimetypes.guess_type(audio_file_path)
-        except Exception as mime_err:
-            logger.warning(f"Failed to guess MIME type for {audio_file_path}: {mime_err}")
-            mime_type = None
-            
-        if not mime_type:
+        # Determine automatically the Content-Type according to the extension
+        mime_mapping = {
+            ".webm": "audio/webm",
+            ".wav": "audio/wav",
+            ".ogg": "audio/ogg",
+            ".mp3": "audio/mpeg",
+            ".m4a": "audio/m4a"
+        }
+        mime_type = mime_mapping.get(suffix)
+        
+        # Never send video/webm
+        if not mime_type or mime_type == "video/webm":
             mime_type = "audio/webm"
+            
+        logger.info(
+            "AUDIO FILE INFO | size=%d bytes | extension=%s | content_type=%s | url=%s",
+            file_size, suffix, mime_type, url
+        )
             
         logger.info(f"Sending audio file with Content-Type={mime_type}")
         
