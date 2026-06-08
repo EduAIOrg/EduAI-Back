@@ -105,7 +105,7 @@ async def init_db() -> None:
                     "id": "00000000-0000-0000-0000-000000000001",
                     "name": "Free",
                     "price": 0.0,
-                    "currency": "EUR",
+                    "currency": "FCFA",
                     "description": "Forfait de base gratuit pour découvrir la plateforme.",
                     "features": json.dumps([
                         "3 transcriptions / jour",
@@ -122,8 +122,8 @@ async def init_db() -> None:
                 {
                     "id": "00000000-0000-0000-0000-000000000002",
                     "name": "Pro",
-                    "price": 9.99,
-                    "currency": "EUR",
+                    "price": 6500.0,
+                    "currency": "FCFA",
                     "description": "Pour les étudiants et professionnels exigeants.",
                     "features": json.dumps([
                         "100 transcriptions / jour",
@@ -141,8 +141,8 @@ async def init_db() -> None:
                 {
                     "id": "00000000-0000-0000-0000-000000000003",
                     "name": "Enterprise",
-                    "price": 99.99,
-                    "currency": "EUR",
+                    "price": 65000.0,
+                    "currency": "FCFA",
                     "description": "Pour les établissements scolaires et les entreprises.",
                     "features": json.dumps([
                         "Quotas personnalisés",
@@ -165,6 +165,15 @@ async def init_db() -> None:
                     p_dict
                 )
             logger.info("Seeding complete.")
+        else:
+            # Update existing plans to FCFA
+            try:
+                await conn.execute(text("UPDATE plans SET price = 0.0, currency = 'FCFA' WHERE id = '00000000-0000-0000-0000-000000000001';"))
+                await conn.execute(text("UPDATE plans SET price = 6500.0, currency = 'FCFA' WHERE id = '00000000-0000-0000-0000-000000000002';"))
+                await conn.execute(text("UPDATE plans SET price = 65000.0, currency = 'FCFA' WHERE id = '00000000-0000-0000-0000-000000000003';"))
+                logger.info("Successfully updated default plans to FCFA")
+            except Exception as update_err:
+                logger.warning(f"Could not update plans currency to FCFA: {update_err}")
 
 
 async def close_db() -> None:
